@@ -1,5 +1,5 @@
 # Use an official Maven Image to build the spring booot app
-FROM maven:3.8.4-openjdk-17 AS build
+FROM openjdk:17.0.9-jdk-slim
 
 # set the working directory
 WORKDIR /app
