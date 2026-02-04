@@ -1,32 +1,16 @@
-# --------------------------
-# Stage 1: Build the app
-# --------------------------
-FROM maven:3.9.2-eclipse-temurin-17 AS build
+# First stage: build the application
+FROM openjdk:17-jdk-slim AS builder  # Changed to 'builder' instead of non-existent 'build:latest'
+WORKDIR /app
+COPY . .
+# Add your build commands here (e.g., mvn package, gradle build, etc.)
 
+# Second stage: create the runtime image
+FROM openjdk:17-jdk-slim  # Or use openjdk:17-jre-slim for smaller image
 WORKDIR /app
 
-# Copy pom.xml and download dependencies
-COPY pom.xml .
-RUN mvn dependency:go-offline
+# Copy the built JAR from the builder stage
+COPY --from=builder /app/target/EdulinkServer-0.0.1-SNAPSHOT.jar .
 
-# Copy source code
-COPY src ./src
-
-# Build the jar
-RUN mvn clean package -DskipTests
-
-# --------------------------
-# Stage 2: Run the app
-# --------------------------
-FROM eclipse-temurin:17-jdk-focal
-
-WORKDIR /app
-
-# Copy jar from build stage
-COPY --from=build /app/target/EdulinkServer-0.0.1-SNAPSHOT.jar app.jar
-
-# Expose port
+# Expose port and run the application
 EXPOSE 8080
-
-# Run the jar
-ENTRYPOINT ["java","-jar","app.jar"]
+CMD ["java", "-jar", "EdulinkServer-0.0.1-SNAPSHOT.jar"]
