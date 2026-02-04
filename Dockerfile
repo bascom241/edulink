@@ -1,16 +1,34 @@
-# First stage: build the application
-FROM openjdk:17-jdk-slim AS builder  # Changed to 'builder' instead of non-existent 'build:latest'
-WORKDIR /app
-COPY . .
-# Add your build commands here (e.g., mvn package, gradle build, etc.)
+# Use an official Maven Image to build the spring booot app
+FROM maven:3.8.4-openjdk-17 AS build
 
-# Second stage: create the runtime image
-FROM openjdk:17-jdk-slim  # Or use openjdk:17-jre-slim for smaller image
+# set the working directory
 WORKDIR /app
 
-# Copy the built JAR from the builder stage
-COPY --from=builder /app/target/EdulinkServer-0.0.1-SNAPSHOT.jar .
+# copy the pom.xml and install dependencies
+COPY pom.xml .
 
-# Expose port and run the application
+
+#Copy the source code and build the application
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# use an official OpenJDK image to run the application
+FROM openjdk:17-jdk-slim
+
+# set the working directory
+WORKDIR /app
+
+# copy the built JAR file from the build stage
+COPY --from=build /app/target/EdulinkServer-0.0.1-SNAPSHOT.jar .
+
+# expose port 8080
 EXPOSE 8080
-CMD ["java", "-jar", "EdulinkServer-0.0.1-SNAPSHOT.jar"]
+
+# Specify the command to run the application i.e running the jar file inside the container
+ENTRYPOINT ["java", "-jar", "/app/EdulinkServer-0.0.1-SNAPSHOT.jar"]
+
+
+## now we need to build and create an image using this docker file
+## build the image using ## docker build -t edulink-deployment .
+## tag the application ## docker tag edulink-deployment:latest bascotee/edulink-deployment:latest
+## push to deployment docker push bascotee/edulink-deployment:latest
