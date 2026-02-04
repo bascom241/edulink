@@ -1,0 +1,213 @@
+package com.Edulink.EdulinkServer.dto.user;
+
+import com.Edulink.EdulinkServer.enums.TeachingLevel;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+
+@Component
+public class UserRequestDTO{
+    // Identity
+    private boolean student;
+    private boolean teacher;
+
+    // Security
+    private String email;
+    private String password;
+    private String confirmPassword;
+    private String role;
+    private LocalDateTime tokenExpiry;
+    private String token;
+
+    public LocalDateTime getTokenExpiry() {
+        return tokenExpiry;
+    }
+
+    public void setTokenExpiry(LocalDateTime tokenExpiry) {
+        this.tokenExpiry = tokenExpiry;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
+    }
+
+    // Personal
+    private String firstName;
+    private String lastName;
+    private String phoneNumber;
+
+    // Professional
+    private String[] teachingSubjects;
+    private TeachingLevel teachingLevel;
+    private String shortBio;
+    private int yearsOfExperience;
+    ///  Certificate Image Collection Data
+    private String certificateUrl;
+    private String certificateImageType;
+    private String certificateImageName;
+
+
+
+    private String socialLink;
+    private String bankAccount;
+    private String bankName;
+
+    public boolean isStudent() {
+        return student;
+    }
+
+    public void setStudent(boolean student) {
+        this.student = student;
+    }
+
+    public boolean isTeacher() {
+        return teacher;
+    }
+
+    public void setTeacher(boolean teacher) {
+        this.teacher = teacher;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public String getCertificateUrl() {
+        return certificateUrl;
+    }
+
+    public void setCertificateUrl(String certificateUrl) {
+        this.certificateUrl = certificateUrl;
+    }
+
+    public String getCertificateImageType() {
+        return certificateImageType;
+    }
+
+    public void setCertificateImageType(String certificateImageType) {
+        this.certificateImageType = certificateImageType;
+    }
+
+    public String getCertificateImageName() {
+        return certificateImageName;
+    }
+
+    public void setCertificateImageName(String certificateImageName) {
+        this.certificateImageName = certificateImageName;
+    }
+
+    public String getConfirmPassword() {
+        return confirmPassword;
+    }
+
+    public void setConfirmPassword(String confirmPassword) {
+        this.confirmPassword = confirmPassword;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public String[] getTeachingSubjects() {
+        return teachingSubjects;
+    }
+
+    public void setTeachingSubjects(String[] teachingSubjects) {
+        this.teachingSubjects = teachingSubjects;
+    }
+
+    public TeachingLevel getTeachingLevel() {
+        return teachingLevel;
+    }
+
+    public void setTeachingLevel(TeachingLevel teachingLevel) {
+        this.teachingLevel = teachingLevel;
+    }
+
+    public String getShortBio() {
+        return shortBio;
+    }
+
+    public void setShortBio(String shortBio) {
+        this.shortBio = shortBio;
+    }
+
+    public int getYearsOfExperience() {
+        return yearsOfExperience;
+    }
+
+    public void setYearsOfExperience(int yearsOfExperience) {
+        this.yearsOfExperience = yearsOfExperience;
+    }
+
+
+
+
+    public String getSocialLink() {
+        return socialLink;
+    }
+
+    public void setSocialLink(String socialLink) {
+        this.socialLink = socialLink;
+    }
+
+    public String getBankAccount() {
+        return bankAccount;
+    }
+
+    public void setBankAccount(String bankAccount) {
+        this.bankAccount = bankAccount;
+    }
+
+    public String getBankName() {
+        return bankName;
+    }
+
+    public void setBankName(String bankName) {
+        this.bankName = bankName;
+    }
+}

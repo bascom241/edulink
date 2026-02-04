@@ -1,0 +1,489 @@
+package com.Edulink.EdulinkServer.service;
+
+import com.Edulink.EdulinkServer.dao.UserRepository;
+import com.Edulink.EdulinkServer.dto.StudentInfoDto;
+import com.Edulink.EdulinkServer.dto.classroom.ClassroomResponseDto;
+import com.Edulink.EdulinkServer.enums.QuestionType;
+import com.Edulink.EdulinkServer.mapper.ClassroomMapper;
+import com.Edulink.EdulinkServer.model.*;
+import com.Edulink.EdulinkServer.model.embeddables.ClassMaterial;
+
+import com.Edulink.EdulinkServer.repository.AnswerRepository;
+import com.Edulink.EdulinkServer.repository.ClassRepository;
+import com.Edulink.EdulinkServer.repository.QuestionRepository;
+import com.Edulink.EdulinkServer.repository.StudentRepository;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class ClassroomService {
+
+
+    @Autowired
+    private ClassRepository classRepository;
+    @Autowired
+    private Cloudinary cloudinary;
+
+    @Autowired
+    private EmailService emailService;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private QuestionRepository questionRepository;
+
+    @Autowired
+    private AnswerRepository answerRepository;
+
+    @Autowired
+    private PayStackService payStackService;
+
+
+    @Autowired
+    private StudentRepository studentRepository;
+
+
+
+    // Create a Classroom
+    public Classroom addClassroom(
+            Long ownerId,
+            Classroom classroom,
+            List<StudentInfo> students,
+
+            List<MultipartFile> resourceFiles, List<String> resourceTitles, List<String> resourceDescriptions,
+            List<MultipartFile> assignmentFiles, List<String> assignmentTitles, List<String> assignmentDescriptions,
+            List<MultipartFile> taskFiles, List<String> taskTitles, List<String> taskDescriptions
+    ) throws IOException {
+
+
+
+        for(StudentInfo student : students){
+            student.getClassrooms().add(classroom);
+            classroom.getStudents().add(student);
+        }
+
+        // Upload resources, assignments, tasks
+        classroom.setResources(uploadFiles(resourceFiles, resourceTitles, resourceDescriptions, "classroom_resources"));
+        classroom.setAssignments(uploadFiles(assignmentFiles, assignmentTitles, assignmentDescriptions, "classroom_assignments"));
+        classroom.setTasks(uploadFiles(taskFiles, taskTitles, taskDescriptions, "classroom_tasks"));
+
+        User owner = userRepository.findById(ownerId).orElseThrow(() -> new RuntimeException("Classroom Owner Not Found"));
+        classroom.setOwner(owner);
+
+
+        try {
+            if(owner.getSubAccountCode() == null){
+                String subAccountCode = payStackService.createSubAccount(
+                        classroom.getOwner().getFirstName(),
+                        classroom.getOwner().getBankCode(),
+                        classroom.getOwner().getBankAccount(),
+                        90
+                );
+
+
+                owner.setBankCode(subAccountCode);
+                userRepository.updateSubAccountCode(owner.getUserId(), subAccountCode);
+            }
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            throw new RuntimeException(e);
+        }
+
+
+        Classroom savedClassroom = classRepository.save(classroom);
+
+        // Ensure students are updated
+        studentRepository.saveAll(students);
+        return savedClassroom;
+    }
+
+    // Utility Method to add files to Cloudinary
+
+    private List<ClassMaterial> uploadFiles(
+            List<MultipartFile> files,
+            List<String> titles,
+            List<String> descriptions,
+            String folder
+    ) throws IOException {
+
+        List<ClassMaterial> materials = new ArrayList<>();
+
+        if (files != null) {
+            for (int i = 0; i < files.size(); i++) {
+                MultipartFile file = files.get(i);
+                if (!file.isEmpty()) {
+                    Map uploadResult = cloudinary.uploader().upload(file.getBytes(),
+                            ObjectUtils.asMap("folder", folder));
+
+                    ClassMaterial material = new ClassMaterial();
+                    material.setTitle(titles.get(i));               // use title from client
+                    material.setDescription(descriptions.get(i));   // use description from client
+                    material.setFileUrl(uploadResult.get("secure_url").toString());
+                    materials.add(material);
+                }
+            }
+        }
+
+        return materials;
+    }
+
+
+
+    // Util Method to Fin Classroom
+    public Classroom findClassRoom (Long classroomId){
+        return classRepository.findById(classroomId).orElseThrow(()->new RuntimeException("Class Room Not Found"));
+    }
+
+    public ClassroomResponseDto findClassInstructorRoom(Long classroomId) {
+        Classroom classroom = classRepository.findById(classroomId)
+                .orElseThrow(() -> new RuntimeException("Class Room Not Found"));
+
+        // convert entity → DTO
+        return ClassroomMapper.toDto(classroom);
+    }
+
+
+
+    // List classrooms that belongs to a single tutor
+
+    public List<ClassroomResponseDto> findInstructorClassrooms(String email){
+        User instructor = userRepository.findByEmail(email);
+        if (instructor == null) {
+            throw new RuntimeException("Instructor not found with email: " + email);
+        }
+        if(!instructor.isTeacher()){
+            throw new RuntimeException("This is for instructor Only");
+        }
+
+        List<Classroom> classrooms = classRepository.findByOwner_Email(email);
+
+        return classrooms.stream().map(ClassroomMapper::toDto).toList();
+    }
+
+    // fetch single Classroom
+    public ClassroomResponseDto findSingleInstructorClassroom(String email , Long classId){
+        User instructor = userRepository.findByEmail(email);
+        if (instructor == null) {
+            throw new RuntimeException("Instructor not found with email: " + email);
+        }
+
+        if (!instructor.isTeacher()) {
+            throw new RuntimeException("This is for instructor Only");
+        }
+
+        return findClassInstructorRoom(classId);
+
+    }
+
+
+
+
+    // Util Method to Fin Classroom
+    public Question findQuestion(Long questionId){
+        return questionRepository.findById(questionId).orElseThrow(()->new RuntimeException("Question not Found"));
+    }
+
+
+    // Add Resources for students on classroom
+    public Classroom addResources(Long classroomId, List<MultipartFile> resourcesFiles , List<String> resourcesTitles , List<String> resourcesDescription ) throws IOException {
+
+        Classroom classroom = findClassRoom(classroomId);
+
+        // Get Existing Resources
+        List<ClassMaterial> existingResources = classroom.getResources();
+
+        List<ClassMaterial> newResources = uploadFiles(resourcesFiles, resourcesTitles, resourcesDescription, "classroom_resources");
+
+        if(existingResources != null){
+            existingResources.addAll(newResources);
+        }else{
+            existingResources  = newResources;
+        }
+
+        classroom.setResources(existingResources);
+
+        return classRepository.save(classroom);
+    }
+
+
+    // Add Assignments for students in a classroom
+    public Classroom addAssignments(Long classroomId, List<MultipartFile> assignmentFiles , List<String> assignmentTitle, List<String> assignmentDescription) throws IOException {
+
+        Classroom classroom = findClassRoom(classroomId);
+
+        // Get Existing Assignment
+        List<ClassMaterial> existingAssignment = classroom.getAssignments();
+
+        List<ClassMaterial> newAssignments = uploadFiles(assignmentFiles, assignmentTitle, assignmentDescription, "classroom_assignments");
+
+        if(existingAssignment != null ){
+            existingAssignment.addAll(newAssignments);
+        }else {
+            existingAssignment = newAssignments;
+        }
+
+        classroom.setAssignments(existingAssignment);
+
+        return classRepository.save(classroom);
+    }
+
+
+
+    // Add File For Tasks for students
+    public Classroom addTask(Long classRoomId, List<MultipartFile> taskFiles, List<String> taskTitle, List<String> taskDescription) throws IOException {
+        Classroom classroom = findClassRoom(classRoomId);
+
+        // Get All Existing Task;
+
+        List<ClassMaterial> existingTasks = classroom.getTasks();
+
+        List<ClassMaterial> newClassTasks = uploadFiles(taskFiles, taskTitle,taskDescription, "classroom_tasks");
+
+        if(existingTasks != null ){
+            existingTasks.addAll(newClassTasks);
+        } else {
+            existingTasks = newClassTasks;
+        }
+
+        classroom.setTasks(existingTasks);
+
+        return classRepository.save(classroom);
+    }
+
+
+    public Classroom addQuestions(Long classroomId, Question question){
+        Classroom classroom = findClassRoom(classroomId);
+
+
+        if(question.getQuestionType() == null){
+            throw new RuntimeException("Question Type is Required");
+        }
+
+
+        question.setClassroom(classroom);
+
+        classroom.getQuestions().add(question);
+        return classRepository.save(classroom);
+    }
+
+
+    public StudentAnswer submitAnswer(Long questionId, StudentInfo studentInfo, String answerText){
+        Question question = findQuestion(questionId);
+
+
+        if (question.getQuestionType() == QuestionType.NUMBER) {
+            try {
+                Integer.parseInt(answerText);
+            } catch (NumberFormatException e) {
+                throw new RuntimeException("Answer must be a number!");
+            }
+        }
+
+        if(question.getQuestionType() == QuestionType.MULTIPLE_CHOICE){
+            List<String> validOptions = Arrays.asList(question.getMultipleChoice().split(","));
+            if (!validOptions.contains(answerText)) {
+                throw new RuntimeException("Answer must be one of: " + validOptions);
+            }
+        }
+
+        StudentAnswer answer = new StudentAnswer();
+        answer.setQuestion(question);
+        answer.setStudentInfo(studentInfo);
+        answer.setAnswer(answerText);
+
+        return answerRepository.save(answer);
+
+
+    }
+
+
+    public boolean verifyJoinRequest(StudentInfo studentInfo,  Long classroomId, String teacherEmail){
+        Classroom classroom = findClassRoom(classroomId);
+
+        // check if classroom is full
+        if (classroom.isClassroomFull()) {
+            throw new RuntimeException("Classroom is full. Can't join.");
+        }
+
+        // send notification
+        String verifyStudentUrl = "http://localhost:5173/notifications";
+        emailService.sendStudentJoinNotification(teacherEmail, verifyStudentUrl, studentInfo);
+
+        return true;
+
+    }
+
+    public void verifyIfStudentExitsInClassroomAndStudentInfo( Long classroomId, String studentEmail){
+        User student = userRepository.findByEmail(studentEmail);
+        Optional<StudentInfo> studentInfoOpt = studentRepository.findFirstByEmail(student.getEmail());
+        Classroom classroom = classRepository.findById(classroomId).orElseThrow(()-> new RuntimeException("Classroom Not Found"));
+
+        if (studentInfoOpt.isPresent()) {
+            StudentInfo studentInfo = studentInfoOpt.get();
+            System.out.println("StudentInfo loaded: " + studentInfo.getFirstName() + " " + studentInfo.getLastName());
+
+            if (!studentInfo.getClassrooms().contains(classroom)) {
+                System.out.println("Student not yet in classroom " + classroom.getClassName() + ". Adding now...");
+
+                // ✅ Update owning side
+                studentInfo.getClassrooms().add(classroom);
+
+                // optional (sync in memory)
+                classroom.getStudents().add(studentInfo);
+
+                studentRepository.save(studentInfo); // only owning side must be saved
+                System.out.println("Student added to classroom and saved ✅");
+            } else {
+                System.out.println("Student already in classroom " + classroom.getClassName());
+            }
+
+        } else {
+            System.out.println("No StudentInfo found. Creating new StudentInfo for " + student.getEmail());
+
+            StudentInfo newStudentInfo = new StudentInfo();
+            newStudentInfo.setEmail(student.getEmail());
+            newStudentInfo.setFirstName(student.getFirstName());
+            newStudentInfo.setLastName(student.getLastName());
+            newStudentInfo.setUser(student);
+
+            // ✅ Add classroom (owning side)
+            newStudentInfo.getClassrooms().add(classroom);
+
+            studentRepository.save(newStudentInfo);
+            System.out.println("New studentInfo created and saved with classroom ✅");
+        }
+
+    }
+
+
+    // Fetching all Classrooms Created by instructors  (Todo)
+    // Fetching all Classrooms Created by instructors and returning Length
+    // Fetching all Classrooms Filterd by full or not ...
+
+
+    public List<ClassroomResponseDto> getClassroomsByStudentEmail(String email) {
+        List<Classroom> classrooms = classRepository.findAllByStudentEmail(email);
+        return classrooms.stream()
+                .map(ClassroomMapper::toDto)
+                .collect(Collectors.toList());
+    }
+
+    public long getInstructorClassroomCount(String email){
+        User instructor = userRepository.findByEmail(email);
+
+        if(instructor == null){
+            throw new RuntimeException("Instructor Not Found");
+        }
+
+        if(!instructor.isTeacher()){
+            throw new RuntimeException("Onl Instructors can have classrooms");
+        }
+
+        return classRepository.countByOwner_Email(email);
+
+    }
+
+    public int getInstructorClassroomStudentCounts(String email){
+        User instructor = userRepository.findByEmail(email);
+
+        if(instructor == null){
+            throw new RuntimeException("Instructor Not Found");
+        }
+
+        List<StudentInfo> students = studentRepository.findAll();
+        List<Classroom> instructorClassrooms = classRepository.findByOwner_Email(email);
+
+        List<StudentInfo> allStudents = instructorClassrooms.stream().flatMap(classroom -> classroom.getStudents().stream())
+                .distinct()
+                .toList();
+
+        return allStudents.size();
+
+    }
+
+    // Todo ( Has a bug )
+    // Get all students for a class room
+    public List<StudentInfoDto> getMyClassroomStudents(String teacherEmail) {
+        // 1. Find the instructor
+        User instructor = userRepository.findByEmail(teacherEmail);
+        if (instructor == null) {
+            throw new RuntimeException("Instructor Not Found");
+        }
+        System.out.println("Instructor found: " + instructor.getEmail() + " (id=" + instructor.getUserId() + ")");
+
+        // 2. Get all classrooms owned by this instructor
+        List<Classroom> teacherClassrooms = classRepository.findByOwner_Email(teacherEmail);
+        System.out.println("Total classrooms found for instructor: " + teacherClassrooms.size());
+
+        teacherClassrooms.forEach(c -> {
+            System.out.println("Classroom -> id=" + c.getClassId() + ", name=" + c.getClassName());
+            try {
+                System.out.println("   Students count = " + c.getStudents().size());
+            } catch (Exception e) {
+                System.out.println("   Error accessing students: " + e.getMessage());
+            }
+        });
+
+        // 3. Flatten all students from those classrooms and map to DTOs
+        List<StudentInfoDto> students = teacherClassrooms.stream()
+                .flatMap(c -> c.getStudents().stream())   // get students from each classroom
+                .distinct()                               // remove duplicates
+                .map(s -> new StudentInfoDto(             // convert to DTO
+                        s.getStudentId(),
+                        s.getFirstName(),
+                        s.getLastName(),
+                        s.getEmail()
+                ))
+                .toList();
+
+        System.out.println("Total unique students returned: " + students.size());
+        students.forEach(s ->
+                System.out.println("   Student -> id=" + s.getStudentId() + ", email=" + s.getEmail())
+        );
+
+        return students;
+    }
+
+
+    // Todo For student end points
+
+    // Not sure if it will be Implemented
+    public Classroom enrollStudentToClassroom(StudentInfo studentInfo, Long classroomId){
+        Classroom classroom = findClassRoom(classroomId);
+
+        // Add student to list of students
+        List<StudentInfo> studentInfoList = classroom.getStudents();
+
+        classroom.setStudents(studentInfoList);
+
+        return classRepository.save(classroom);
+
+    }
+
+    public Page<ClassroomResponseDto> getAllClassrooms (int page , int size , String sortBy , String direction){
+        Sort sort = Sort.by(Sort.Direction.fromString(direction), sortBy);
+        Pageable pageable = PageRequest.of(page, size , sort);
+
+        Page <Classroom> classrooms= classRepository.findAll(pageable);
+
+        return classrooms.map(ClassroomMapper::toDto);
+    }
+
+
+}
+
+
+
+
