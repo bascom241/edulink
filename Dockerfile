@@ -1,31 +1,39 @@
 # Use an official Maven Image to build the spring booot app
-FROM maven:3.8.4-openjdk-17 AS build
+FROM maven:3.9.6-eclipse-temurin-17 AS build
+
 
 # set the working directory
 WORKDIR /app
 
 # copy the pom.xml and install dependencies
 COPY pom.xml .
+RUN mvn dependency:go-offline
 
 
-#Copy the source code and build the application
-COPY src ./src
-RUN mvn clean package -DskipTests
+# ---------- BUILD STAGE ----------
+FROM maven:3.9.6-eclipse-temurin-17 AS build
 
-# use an official OpenJDK image to run the application
-FROM openjdk:17-jdk-slim
-
-# set the working directory
 WORKDIR /app
 
-# copy the built JAR file from the build stage
-COPY --from=build /app/target/EdulinkServer-0.0.1-SNAPSHOT.jar .
+# Copy pom and source together
+COPY pom.xml .
+COPY src ./src
 
-# expose port 8080
+# Build the application
+RUN mvn clean package -DskipTests
+
+
+# ---------- RUNTIME STAGE ----------
+FROM amazoncorretto:17-alpine AS runtime
+
+WORKDIR /app
+
+# Copy the built jar (no hardcoding version)
+COPY --from=build /app/target/*.jar app.jar
+
 EXPOSE 8080
 
-# Specify the command to run the application i.e running the jar file inside the container
-ENTRYPOINT ["java", "-jar", "/app/EdulinkServer-0.0.1-SNAPSHOT.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
 
 
 ## now we need to build and create an image using this docker file
