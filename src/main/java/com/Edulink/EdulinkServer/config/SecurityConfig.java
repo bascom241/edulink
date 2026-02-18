@@ -61,6 +61,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/forgot-password",
                                 "/api/v1/auth/reset-password",
                                 "/api/banks",
+                                "api/banks/sync",
                                 "/ws/**" // 👈 allow websocket handshake + SockJS info calls
                         ).permitAll()
                         // 👇 allow preflight CORS requests
