@@ -18,10 +18,17 @@ public class BankController {
     }
 
 
+
     @GetMapping
     public ResponseEntity<?> fetchBanks() {
         List<Bank> banks = bankService.getAllBanks();
         return ResponseEntity.ok(banks);
 
+    }
+
+    @PostMapping("/sync")
+    public ResponseEntity<List<Bank>> syncBanks() {
+        List<Bank> banks = bankService.fetchAndSaveBanks();
+        return ResponseEntity.ok(banks);
     }
 }

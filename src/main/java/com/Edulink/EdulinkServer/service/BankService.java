@@ -25,16 +25,15 @@ public class BankService {
         this.bankRepository = bankRepository;
     }
 
-    public ResponseEntity<List<Bank>> getBanks() {
-
+    public List<Bank> fetchAndSaveBanks() {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(payStackSecret);
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
-
         String payStackUrl = "https://api.paystack.co/bank";
 
+        // PaystackResponse contains data field with list of banks
         ResponseEntity<PaystackResponse<List<Bank>>> response =
                 restTemplate.exchange(
                         payStackUrl,
@@ -43,17 +42,10 @@ public class BankService {
                         new ParameterizedTypeReference<PaystackResponse<List<Bank>>>() {}
                 );
 
-        List<Bank> banks = Objects.requireNonNull(response.getBody()).getData();
-
-
+        List<Bank> banks = Objects.requireNonNull(response.getBody()).getData(); // <-- this is List<Bank>
         bankRepository.saveAll(banks);
 
-
-        banks.forEach(bank ->
-                System.out.println(bank.getName() + " - " + bank.getCode())
-        );
-
-        return ResponseEntity.ok(banks);
+        return banks;
     }
 
 

@@ -50,7 +50,7 @@ public class PayStackService {
 
         body.put("email", studentInfo.getEmail());
         body.put("amount", amount * 100);
-        body.put("callback_url" , "http://localhost:5173/initialize/success");
+        body.put("callback_url" , "https://edulinkapp.pxxl.click/initialize/success");
         body.put("first_name", studentInfo.getFirstName());
         body.put("last_name", studentInfo.getLastName());
 
